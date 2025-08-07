@@ -1,14 +1,15 @@
-FROM debian:bullseye-slim AS build-env
+FROM debian:bookworm-slim AS build-env
 ENV DEBIAN_FRONTEND=noninteractive
 ARG TESTS
 ARG SOURCE_COMMIT
 ARG BUSYBOX_VERSION=1.36.1
 ARG SUPERVISOR_VERSION=4.2.5
 ARG GO_VERSION=1.24.1
+ARG PYTHON_A2S_VERSION=1.4.1
 
 RUN apt-get update
 RUN apt-get -y install apt-utils
-RUN apt-get -y install build-essential curl git python3 python3-pip shellcheck
+RUN apt-get -y install build-essential curl git python3 python3-pip python3-venv shellcheck
 
 # Install Go 1.24 manually
 RUN curl -L -o /tmp/go${GO_VERSION}.linux-amd64.tar.gz https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -29,11 +30,11 @@ RUN curl -L -o /tmp/busybox.tar.bz2 https://busybox.net/downloads/busybox-${BUSY
 WORKDIR /build/env2cfg
 COPY ./env2cfg/ /build/env2cfg/
 RUN if [ "${TESTS:-true}" = true ]; then \
-    pip3 install tox \
-    && tox \
+    python3 -m venv ../env2cfg.tests.venv \
+    && ../env2cfg.tests.venv/bin/pip3 install tox~=4.28.4 \
+    && ../env2cfg.tests.venv/bin/tox \
     ; \
     fi
-RUN python3 setup.py bdist --format=gztar
 
 WORKDIR /build/valheim-logfilter
 COPY ./valheim-logfilter/ /build/valheim-logfilter/
@@ -45,15 +46,6 @@ RUN go build -ldflags="-s -w" \
     && mv valheim-logfilter /usr/local/bin/
 
 WORKDIR /build
-RUN git clone https://github.com/Yepoleb/python-a2s.git \
-    && cd python-a2s \
-    && python3 setup.py bdist --format=gztar
-
-WORKDIR /build/supervisor
-RUN curl -L -o /tmp/supervisor.tar.gz https://github.com/Supervisor/supervisor/archive/${SUPERVISOR_VERSION}.tar.gz \
-    && tar xzvf /tmp/supervisor.tar.gz --strip-components=1 -C /build/supervisor \
-    && python3 setup.py bdist --format=gztar
-
 COPY bootstrap /usr/local/sbin/
 COPY valheim-tests /usr/local/bin/
 COPY valheim-status /usr/local/bin/
@@ -84,16 +76,18 @@ RUN if [ "${TESTS:-true}" = true ]; then \
     fi
 WORKDIR /
 RUN rm -rf /usr/local/lib/
-RUN tar xzvf /build/supervisor/dist/supervisor-*.linux-x86_64.tar.gz
-RUN tar xzvf /build/env2cfg/dist/env2cfg-*.linux-x86_64.tar.gz
-RUN tar xzvf /build/python-a2s/dist/python-a2s-*.linux-x86_64.tar.gz
+# Debian's pip is modded to install to /usr/local by default.
+RUN pip3 install --break-system-packages \
+    python-a2s==${PYTHON_A2S_VERSION} \
+    supervisor==${SUPERVISOR_VERSION} \
+    /build/env2cfg
 COPY supervisord.conf /usr/local/etc/supervisord.conf
 RUN mkdir -p /usr/local/etc/supervisor/conf.d/ \
     && chmod 640 /usr/local/etc/supervisord.conf
 RUN echo "${SOURCE_COMMIT:-unknown}" > /usr/local/etc/git-commit.HEAD
 
 
-FROM --platform=linux/386 debian:buster-slim AS i386-libs
+FROM --platform=linux/386 i386/debian:bookworm-slim AS i386-libs
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get -y --no-install-recommends install \
@@ -104,7 +98,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=build-env /usr/local/ /usr/local/
 COPY --from=i386-libs /lib/ld-linux.so.2 /lib/ld-linux.so.2
