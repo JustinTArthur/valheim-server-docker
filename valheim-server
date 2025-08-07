@@ -33,9 +33,8 @@ if [ "$VALHEIM_PLUS" = true ]; then
 elif [ "$BEPINEX" = true ]; then
     cd "$bepinex_install_path" || fatal "Could not cd $bepinex_install_path"
     rm -rf "$bepinex_install_path.old"
-    export DOORSTOP_ENABLE=TRUE
-    export DOORSTOP_INVOKE_DLL_PATH="./BepInEx/core/BepInEx.Preloader.dll"
-    export DOORSTOP_CORLIB_OVERRIDE_PATH="./unstripped_corlib"
+    export DOORSTOP_ENABLED=1
+    export DOORSTOP_TARGET_ASSEMBLY="./BepInEx/core/BepInEx.Preloader.dll"
     export LD_LIBRARY_PATH="$bepinex_install_path/linux64/:$bepinex_install_path/doorstop_libs/"
     SERVER_LD_PRELOAD=libdoorstop_x64.so
     valheim_server="$bepinex_install_path/valheim_server.x86_64"
@@ -119,10 +118,12 @@ run_server() {
         SERVER_LD_PRELOAD="$SERVER_LD_PRELOAD" \
         LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
         DOORSTOP_ENABLE="$DOORSTOP_ENABLE" \
+        DOORSTOP_ENABLED="$DOORSTOP_ENABLED" \
         DOORSTOP_INVOKE_DLL_PATH="$DOORSTOP_INVOKE_DLL_PATH" \
+        DOORSTOP_TARGET_ASSEMBLY="$DOORSTOP_TARGET_ASSEMBLY" \
         DOORSTOP_CORLIB_OVERRIDE_PATH="$DOORSTOP_CORLIB_OVERRIDE_PATH" \
         bash -c \
-            'export LD_LIBRARY_PATH DOORSTOP_ENABLE DOORSTOP_INVOKE_DLL_PATH DOORSTOP_CORLIB_OVERRIDE_PATH; LD_PRELOAD=$SERVER_LD_PRELOAD exec "$0" "$@"' \
+            'export LD_LIBRARY_PATH DOORSTOP_ENABLE DOORSTOP_ENABLED DOORSTOP_INVOKE_DLL_PATH DOORSTOP_TARGET_ASSEMBLY DOORSTOP_CORLIB_OVERRIDE_PATH; LD_PRELOAD=$SERVER_LD_PRELOAD exec "$0" "$@"' \
             "$valheim_server" -nographics -batchmode -name "$SERVER_NAME" -port "$SERVER_PORT" -world "$WORLD_NAME" -public "$SERVER_PUBLIC" \
             "${valheim_server_args[@]}" $SERVER_ARGS > >(filter) 2>&1 &
 
