@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS build-env
+FROM debian:trixie-slim AS build-env
 ENV DEBIAN_FRONTEND=noninteractive
 ARG TESTS
 ARG SOURCE_COMMIT
@@ -23,7 +23,10 @@ WORKDIR /build/busybox
 RUN curl -L -o /tmp/busybox.tar.bz2 https://busybox.net/downloads/busybox-${BUSYBOX_VERSION}.tar.bz2 \
     && tar xjvf /tmp/busybox.tar.bz2 --strip-components=1 -C /build/busybox \
     && make defconfig \
-    && sed -i -e "s/^CONFIG_FEATURE_SYSLOGD_READ_BUFFER_SIZE=.*/CONFIG_FEATURE_SYSLOGD_READ_BUFFER_SIZE=2048/" .config \
+    && sed -i \
+        -e "s/^CONFIG_FEATURE_SYSLOGD_READ_BUFFER_SIZE=.*/CONFIG_FEATURE_SYSLOGD_READ_BUFFER_SIZE=2048/" \
+        -e "s/^CONFIG_TC=y/CONFIG_TC=n/" \
+        .config \
     && make \
     && cp busybox /usr/local/bin/
 
@@ -77,9 +80,13 @@ RUN if [ "${TESTS:-true}" = true ]; then \
 WORKDIR /
 RUN rm -rf /usr/local/lib/
 # Debian's pip is modded to install to /usr/local by default.
+# Freezes an old version of Setuptools to prevent a flood of deprecation
+# notices while supervisor still uses it. Setuptools dependency can be removed
+# when supervisor>=4.3.0 is released
 RUN pip3 install --break-system-packages \
     python-a2s==${PYTHON_A2S_VERSION} \
     supervisor==${SUPERVISOR_VERSION} \
+    "Setuptools<67.5.0" \
     /build/env2cfg
 COPY supervisord.conf /usr/local/etc/supervisord.conf
 RUN mkdir -p /usr/local/etc/supervisor/conf.d/ \
@@ -87,7 +94,7 @@ RUN mkdir -p /usr/local/etc/supervisor/conf.d/ \
 RUN echo "${SOURCE_COMMIT:-unknown}" > /usr/local/etc/git-commit.HEAD
 
 
-FROM --platform=linux/386 i386/debian:bookworm-slim AS i386-libs
+FROM --platform=linux/386 i386/debian:trixie-slim AS i386-libs
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get -y --no-install-recommends install \
@@ -98,7 +105,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=build-env /usr/local/ /usr/local/
 COPY --from=i386-libs /lib/ld-linux.so.2 /lib/ld-linux.so.2

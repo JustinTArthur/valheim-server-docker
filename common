@@ -185,7 +185,7 @@ server_is_listening() {
     # Check if server is listening on either server or query port
     # since crossplay-enabled servers don't listen on $SERVER_PORT
     
-    awk -v server_port="$SERVER_PORT" -v server_query_port="$SERVER_QUERY_PORT" '
+    awk -v server_port="$SERVER_PORT" -v server_query_port="$SERVER_QUERY_PORT" -Wposix '
         BEGIN {
             exit_code = 1
         }
